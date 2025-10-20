@@ -5,6 +5,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "projects")
@@ -17,8 +18,8 @@ public class Project {
     @Column(name = "team_id")
     private Long teamId;
     
-    @Column(name = "member_id")
-    private Long memberId;
+//    @Column(name = "member_id")
+//    private Long memberId;
     
     @CreationTimestamp
     @Column(name = "created_at")
@@ -29,12 +30,12 @@ public class Project {
     private LocalDateTime updatedAt;
     
     @Column(name = "created_by")
-    private Long createdBy;
+    private UUID createdBy;
     
     @Column(name = "updated_by")
-    private Long updatedBy;
+    private UUID updatedBy;
     @Column(name = "user_id")
-    private Long userId;
+    private UUID userId;
     
     @Enumerated(EnumType.STRING)
     private ProjectStatus status;
@@ -47,9 +48,9 @@ public class Project {
     public Project() {}
     
     // 생성자
-    public Project(Long teamId, Long memberId, Long createdBy) {
+    public Project(Long teamId,  UUID createdBy) {
         this.teamId = teamId;
-        this.memberId = memberId;
+//        this.memberId = memberId;
         this.createdBy = createdBy;
         this.status = ProjectStatus.INCOMPLETE;
     }
@@ -59,30 +60,33 @@ public class Project {
     public void setProjectId(Long projectId) { this.projectId = projectId; }
     
     public Long getTeamId() { return teamId; }
+
     public void setTeamId(Long teamId) { this.teamId = teamId; }
     
-    public Long getMemberId() { return memberId; }
-    public void setMemberId(Long memberId) { this.memberId = memberId; }
-    
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     
-    public Long getCreatedBy() { return createdBy; }
-    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+    public UUID getCreatedBy() { return createdBy; }
+    public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }
     
-    public Long getUpdatedBy() { return updatedBy; }
-    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
+    public UUID getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(UUID updatedBy) { this.updatedBy = updatedBy; }
     
     public ProjectStatus getStatus() { return status; }
     public void setStatus(ProjectStatus status) { this.status = status; }
     
     public Team getTeam() { return team; }
     public void setTeam(Team team) { this.team = team; }
+    public void setUserId(UUID userId){
+        this.userId = userId;
+    }
+    public UUID getUserId() {
+        return userId;
+    }
+
 }
 
-enum ProjectStatus {
-    COMPLETE, INCOMPLETE
-}

@@ -1,9 +1,11 @@
 package OrangeCloud.UserRepo.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
+
 import java.util.List;
 import java.util.UUID;
-
+@Data
 @Entity
 @Table(name = "teams")
 public class Team {
@@ -13,13 +15,13 @@ public class Team {
     private Long teamId;
 
     @Column(name = "user_id")
-    private Long userId;
+    private UUID userId;
 
-    @Column(name = "member_id")
-    private Long memberId;
+//    @Column(name = "member_id")
+//    private Long memberId;
 
-    @Column(name = "user_uuid", columnDefinition = "UUID")
-    private UUID userUuid;
+//    @Column(name = "user_uuid", columnDefinition = "UUID")
+//    private UUID userUuid;
 
     @Column(name = "group_id", columnDefinition = "UUID")
     private UUID groupId;
@@ -39,25 +41,24 @@ public class Team {
     public Team() {}
 
     // 생성자
-    public Team(Long userId, Long memberId, UUID userUuid, UUID groupId) {
+    public Team(UUID userId, Long teamId, UUID groupId) {
         this.userId = userId;
-        this.memberId = memberId;
-        this.userUuid = userUuid;
+        this.teamId = teamId;
         this.groupId = groupId;
     }
 
-    // Getter, Setter
+//    // Getter, Setter
     public Long getTeamId() { return teamId; }
     public void setTeamId(Long teamId) { this.teamId = teamId; }
 
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID userId) { this.userId = userId; }
 
-    public Long getMemberId() { return memberId; }
-    public void setMemberId(Long memberId) { this.memberId = memberId; }
+//    public Long getMemberId() { return memberId; }
+//    public void setMemberId(Long memberId) { this.memberId = memberId; }
 
-    public UUID getUserUuid() { return userUuid; }
-    public void setUserUuid(UUID userUuid) { this.userUuid = userUuid; }
+//    public UUID getUserUuid() { return userUuid; }
+//    public void setUserUuid(UUID userUuid) { this.userUuid = userUuid; }
 
     public UUID getGroupId() { return groupId; }
     public void setGroupId(UUID groupId) { this.groupId = groupId; }

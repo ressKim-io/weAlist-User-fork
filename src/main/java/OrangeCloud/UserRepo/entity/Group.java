@@ -1,10 +1,11 @@
 package OrangeCloud.UserRepo.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
 import java.util.List;
 import java.util.UUID;
-
+@Data
 @Entity
 @Table(name = "groups")
 public class Group {
@@ -17,11 +18,14 @@ public class Group {
     @Column(nullable = false)
     private String name;
 
+    @Column
+
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL)
     private List<Member> members;
 
-    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL)
-    private List<Team> teams;
+
+//    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL)
+//    private List<Team> teams;
 
     // 기본 생성자
     public Group() {}
@@ -30,17 +34,12 @@ public class Group {
     public Group(String name) {
         this.name = name;
     }
+    public String getName(){return name;}
+    public void setName(String name){
+        this.name = name;
+    }
+    public void setGroupId(UUID groupId){
+        this.groupId = groupId;
+    }
 
-    // Getter, Setter
-    public UUID getGroupId() { return groupId; }
-    public void setGroupId(UUID groupId) { this.groupId = groupId; }
-
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-
-    public List<Member> getMembers() { return members; }
-    public void setMembers(List<Member> members) { this.members = members; }
-
-    public List<Team> getTeams() { return teams; }
-    public void setTeams(List<Team> teams) { this.teams = teams; }
 }

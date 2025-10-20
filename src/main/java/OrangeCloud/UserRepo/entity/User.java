@@ -1,12 +1,16 @@
 package OrangeCloud.UserRepo.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.GenericGenerator;
+import org.springframework.data.annotation.LastModifiedDate;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Data
 @Entity
 @Table(name = "users")
 public class User {
@@ -35,6 +39,11 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Team> teams;
 
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+
     // 기본 생성자
     public User() {}
 
@@ -45,13 +54,13 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
-    // Getter, Setter
+//    // Getter, Setter
     public UUID getUserId() { return userId; }
+    public String getName() { return name;}
     public void setUserId(UUID userId) { this.userId = userId; }
 
-    public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-
+//
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 
