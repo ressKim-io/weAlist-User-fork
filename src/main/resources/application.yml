@@ -1,6 +1,6 @@
 spring:
   application:
-    name: UserRepo
+    name: ${APP_NAME:UserRepo}
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:wealist_db}
@@ -10,12 +10,18 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create
-    show-sql: true
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:true}
     properties:
       hibernate:
-        format_sql: true
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${JPA_FORMAT_SQL:true}
+    database-platform: ${JPA_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:4321}
 
 springdoc:
   swagger-ui:
