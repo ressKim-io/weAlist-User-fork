@@ -15,14 +15,14 @@ public class JwtTokenProvider {
 
     private final SecretKey key;
     private final int jwtExpirationInMs;
-    private final long REFRESH_TOKEN_EXPIRE_TIME = 1000 * 60 * 60 * 24 * 7; // 7일
+    private static final long REFRESH_TOKEN_EXPIRE_TIME = 1000L * 60 * 60 * 24 * 7; // 7일
 
-    public JwtTokenProvider(@Value("${app.jwt-secret:}") String jwtSecret,
-                            @Value("${app.jwt-expiration-ms:1800000}") int jwtExpirationInMs) {
+    public JwtTokenProvider(
+            @Value("${app.jwt-secret}") String jwtSecret,
+            @Value("${app.jwt-expiration-ms:604800000}") int jwtExpirationInMs) {
 
-        // 기본 시크릿이 비어있거나 너무 짧은 경우 안전한 기본값 사용
-        if (jwtSecret == null || jwtSecret.trim().isEmpty() || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 64) {
-            jwtSecret = "OrangeCloudSecretKeyForJWTTokenGenerationMustBeAtLeast64BytesLongForHS512Algorithm2024";
+        if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
+            throw new IllegalArgumentException("JWT Secret이 설정되지 않았습니다. .env 또는 application.yml을 확인하세요.");
         }
 
         this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
@@ -42,7 +42,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // Access Token 생성 (Long 버전) - AuthService와의 호환성을 위해 추가
+    // Access Token 생성 (Long 버전)
     public String generateToken(Long userId) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
@@ -61,41 +61,34 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + REFRESH_TOKEN_EXPIRE_TIME);
 
         return Jwts.builder()
-                .setSubject(String.valueOf(userId))
+                .setSubject(userId.toString())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }
 
-    // Refresh Token 유효성 검사
-    public boolean validateRefreshToken(String token) {
+    // Token 유효성 검사
+    public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .build()
-                    .parseClaimsJws(token);
+            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
     }
 
-    // Refresh Token에서 사용자 ID 추출 (Long 반환)
-    public UUID getUserIdFromRefreshToken(String token) {
+    // Refresh Token 유효성 검사
+    public boolean validateRefreshToken(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
-            return UUID.fromString(claims.getSubject()); // String을 UUID로 변환
+            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+            return true;
         } catch (JwtException | IllegalArgumentException e) {
-            throw new RuntimeException("유효하지 않은 JWT 토큰입니다.", e);
+            return false;
         }
     }
 
-    // Access Token에서 사용자 ID 추출 (UUID 반환)
+    // Access Token에서 사용자 ID 추출
     public UUID getUserIdFromToken(String token) {
         try {
             Claims claims = Jwts.parserBuilder()
@@ -103,38 +96,23 @@ public class JwtTokenProvider {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
-
             return UUID.fromString(claims.getSubject());
         } catch (JwtException | IllegalArgumentException e) {
             throw new RuntimeException("유효하지 않은 JWT 토큰입니다.", e);
         }
     }
 
-    // Access Token에서 사용자 ID 추출 (Long 반환) - AuthService와의 호환성을 위해 추가
-    public Long getUserIdFromTokenAsLong(String token) {
+    // Refresh Token에서 사용자 ID 추출
+    public UUID getUserIdFromRefreshToken(String token) {
         try {
             Claims claims = Jwts.parserBuilder()
                     .setSigningKey(key)
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
-
-            return Long.parseLong(claims.getSubject());
+            return UUID.fromString(claims.getSubject());
         } catch (JwtException | IllegalArgumentException e) {
-            throw new RuntimeException("유효하지 않은 JWT 토큰입니다.", e);
-        }
-    }
-
-    // Token 유효성 검사
-    public boolean validateToken(String token) {
-        try {
-            Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .build()
-                    .parseClaimsJws(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            throw new RuntimeException("유효하지 않은 Refresh Token입니다.", e);
         }
     }
 
@@ -146,7 +124,6 @@ public class JwtTokenProvider {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
-
             return claims.getExpiration().before(new Date());
         } catch (JwtException | IllegalArgumentException e) {
             return true;
