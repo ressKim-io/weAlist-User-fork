@@ -1,8 +1,8 @@
 package OrangeCloud.UserRepo.controller;
 
 import OrangeCloud.UserRepo.dto.MessageApiResponse;
-import OrangeCloud.UserRepo.dto.user.CreateUserInfoRequest;
-import OrangeCloud.UserRepo.dto.user.UpdateUserInfoRequest;
+import OrangeCloud.UserRepo.dto.userinfo.CreateUserInfoRequest;
+import OrangeCloud.UserRepo.dto.userinfo.UpdateUserInfoRequest;
 import OrangeCloud.UserRepo.entity.UserInfo;
 import OrangeCloud.UserRepo.service.UserInfoService;
 import jakarta.validation.Valid;
@@ -21,7 +21,7 @@ public class UserInfoController {
 
     private final UserInfoService userInfoService;
 
-    // 사용자 소프트 삭제
+    // 사용자 정보 소프트 삭제
     @DeleteMapping("/{userId}")
     public ResponseEntity<MessageApiResponse> deleteUser(@PathVariable UUID userId) {
         boolean deleted = userInfoService.softDeleteUser(userId);
@@ -32,7 +32,7 @@ public class UserInfoController {
         }
     }
 
-    // 활성화된 사용자 목록 조회
+    // 활성화된 사용자 정보 목록 조회
     @GetMapping
     public ResponseEntity<List<UserInfo>> getAllActiveUsers() {
         List<UserInfo> users = userInfoService.getAllActiveUsers();
@@ -46,14 +46,14 @@ public class UserInfoController {
         return ResponseEntity.ok(users);
     }
 
-    // 역할별 활성화된 사용자 조회
+    // 역할별 활성화된 사용자 정보 조회
     @GetMapping("/role/{role}")
     public ResponseEntity<List<UserInfo>> getActiveUsersByRole(@PathVariable String role) {
         List<UserInfo> users = userInfoService.getActiveUsersByRole(role);
         return ResponseEntity.ok(users);
     }
 
-    // 사용자 재활성화
+    // 사용자 정보 재활성화
     @PutMapping("/{userId}/reactivate")
     public ResponseEntity<MessageApiResponse> reactivateUser(@PathVariable UUID userId) {
         boolean reactivated = userInfoService.reactivateUser(userId);

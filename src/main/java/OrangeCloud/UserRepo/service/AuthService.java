@@ -3,7 +3,7 @@ package OrangeCloud.UserRepo.service;
 import OrangeCloud.UserRepo.dto.auth.AuthResponse;
 import OrangeCloud.UserRepo.dto.auth.LoginRequest;
 import OrangeCloud.UserRepo.dto.auth.SignupRequest;
-import OrangeCloud.UserRepo.dto.user.UserInfoResponse;
+import OrangeCloud.UserRepo.dto.userinfo.UserInfoResponse;
 import OrangeCloud.UserRepo.entity.User;
 import OrangeCloud.UserRepo.repository.UserRepository;
 import OrangeCloud.UserRepo.util.JwtTokenProvider;

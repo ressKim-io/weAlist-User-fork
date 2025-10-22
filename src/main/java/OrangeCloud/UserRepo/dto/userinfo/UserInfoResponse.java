@@ -1,5 +1,5 @@
 // UserInfoResponse.java
-package OrangeCloud.UserRepo.dto.user;
+package OrangeCloud.UserRepo.dto.userinfo;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

@@ -270,20 +270,8 @@ public class TeamController {
         }
     }
 
-    // 팀 재활성화 - reactivateTeam 메서드 없음으로 주석 처리
-    /*
-    @PutMapping("/{teamId}/reactivate")
-    public ResponseEntity<MessageApiResponse> reactivateTeam(@PathVariable UUID teamId) {
-        log.info("Request to reactivate team: {}", teamId);
 
-        boolean reactivated = teamService.reactivateTeam(teamId);
-        if (reactivated) {
-            return ResponseEntity.ok(MessageApiResponse.success("팀이 성공적으로 재활성화되었습니다."));
-        } else {
-            return ResponseEntity.notFound().build();
-        }
-    }
-    */
+
 
     // === 통계 및 카운트 API들 ===
 

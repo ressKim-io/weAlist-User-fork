@@ -4,7 +4,7 @@ import OrangeCloud.UserRepo.dto.*;
 import OrangeCloud.UserRepo.dto.auth.AuthResponse;
 import OrangeCloud.UserRepo.dto.auth.LoginRequest;
 import OrangeCloud.UserRepo.dto.auth.SignupRequest;
-import OrangeCloud.UserRepo.dto.user.UserInfoResponse;
+import OrangeCloud.UserRepo.dto.userinfo.UserInfoResponse;
 import OrangeCloud.UserRepo.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
