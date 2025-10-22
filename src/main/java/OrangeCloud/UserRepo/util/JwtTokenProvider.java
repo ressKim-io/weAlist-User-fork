@@ -18,7 +18,7 @@ public class JwtTokenProvider {
     private final long REFRESH_TOKEN_EXPIRE_TIME = 1000 * 60 * 60 * 24 * 7; // 7일
 
     public JwtTokenProvider(@Value("${app.jwt-secret:}") String jwtSecret,
-                            @Value("${app.jwt-expiration-ms:604800000}") int jwtExpirationInMs) {
+                            @Value("${app.jwt-expiration-ms:1800000}") int jwtExpirationInMs) {
 
         // 기본 시크릿이 비어있거나 너무 짧은 경우 안전한 기본값 사용
         if (jwtSecret == null || jwtSecret.trim().isEmpty() || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 64) {
