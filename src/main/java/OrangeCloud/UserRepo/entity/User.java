@@ -1,22 +1,26 @@
 package OrangeCloud.UserRepo.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.GenericGenerator;
-import org.springframework.data.annotation.LastModifiedDate;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Data
 @Entity
 @Table(name = "users")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString
+@EqualsAndHashCode(of = "userId")
 public class User {
     @Id
-    @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
+    @GeneratedValue(strategy = GenerationType.UUID)  // IDENTITY → UUID로 변경
     @Column(name = "user_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID userId;
 
@@ -30,49 +34,36 @@ public class User {
     private String passwordHash;
 
     @CreationTimestamp
-    @Column(name = "created_at")
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<Member> members;
-
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<Team> teams;
-
-    @LastModifiedDate
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // 소프트 삭제를 위한 필드들
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = true;
 
-    // 기본 생성자
-    public User() {}
+        @Column(name = "deleted_at")
 
-    // 생성자
-    public User(String name, String email, String passwordHash) {
-        this.name = name;
-        this.email = email;
-        this.passwordHash = passwordHash;
+        private LocalDateTime deletedAt;
+
+    
+
+        // 관계 매핑 (필요시)
+
+        // @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+
+        // private List<Member> members;
+
+    
+
+        // @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+
+        // private List<Team> teams;
+
     }
 
-//    // Getter, Setter
-    public UUID getUserId() { return userId; }
-    public String getName() { return name;}
-    public void setUserId(UUID userId) { this.userId = userId; }
-
-    public void setName(String name) { this.name = name; }
-//
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
-    public String getPasswordHash() { return passwordHash; }
-    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
-
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    public List<Member> getMembers() { return members; }
-    public void setMembers(List<Member> members) { this.members = members; }
-
-    public List<Team> getTeams() { return teams; }
-    public void setTeams(List<Team> teams) { this.teams = teams; }
-}
+    

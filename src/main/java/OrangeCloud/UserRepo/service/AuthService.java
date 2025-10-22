@@ -40,16 +40,16 @@ public class AuthService {
 
     public AuthResponse signup(SignupRequest signupRequest) {
         // 이메일 중복 검사
-        if (userRepository.existsByEmail(signupRequest.getEmail())) {
+        if (userRepository.existsByEmailAndIsActiveTrue(signupRequest.getEmail())) {
             throw new RuntimeException("이미 사용 중인 이메일입니다.");
         }
 
         // 사용자 생성
-        User user = new User(
-                signupRequest.getName(),
-                signupRequest.getEmail(),
-                passwordEncoder.encode(signupRequest.getPassword())
-        );
+        User user = User.builder()
+                .name(signupRequest.getName())
+                .email(signupRequest.getEmail())
+                .passwordHash(passwordEncoder.encode(signupRequest.getPassword()))
+                .build();
 
         User savedUser = userRepository.save(user);
 
@@ -62,7 +62,7 @@ public class AuthService {
 
     public AuthResponse login(LoginRequest loginRequest) {
         // 사용자 찾기
-        User user = userRepository.findByEmail(loginRequest.getEmail())
+        User user = userRepository.findByEmailAndIsActiveTrue(loginRequest.getEmail())
                 .orElseThrow(() -> new RuntimeException("등록되지 않은 이메일입니다."));
 
         // 비밀번호 확인
@@ -108,7 +108,7 @@ public class AuthService {
     }
 
     public UserInfoResponse getCurrentUserInfo(String email) {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailAndIsActiveTrue(email)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
         return new UserInfoResponse(

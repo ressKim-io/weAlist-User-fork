@@ -28,7 +28,8 @@ public class SecurityConfig {
                         // 인증 API 허용
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/groups/**").permitAll()
-                        .requestMatchers("/api/projects/**").permitAll()
+//                        .requestMatchers("/api/projects/**").permitAll()
+                        .requestMatchers("/api/userinfo/**").permitAll()
                         .requestMatchers("/api/teams/**").permitAll()
                         .requestMatchers("/api/users/**").permitAll()
                         // H2 Console 허용

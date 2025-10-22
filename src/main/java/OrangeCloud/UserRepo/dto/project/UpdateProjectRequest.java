@@ -1,23 +1,26 @@
-// UpdateProjectRequest.java
 package OrangeCloud.UserRepo.dto.project;
 
+import OrangeCloud.UserRepo.entity.ProjectStatus;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UpdateProjectRequest {
-    private String status;
-    private String description;
 
-    // 기본 생성자
-    public UpdateProjectRequest() {}
+    @NotNull(message = "팀 ID는 필수입니다.")
+    private UUID teamId;
 
-    // 생성자
-    public UpdateProjectRequest(String status, String description) {
-        this.status = status;
-        this.description = description;
-    }
+    @NotNull(message = "프로젝트 상태는 필수입니다.")
+    private ProjectStatus status;
 
-    // Getter, Setter
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    @NotNull(message = "수정자 ID는 필수입니다.")
+    private UUID updatedBy;
 }

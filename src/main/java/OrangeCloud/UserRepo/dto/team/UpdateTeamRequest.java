@@ -1,14 +1,22 @@
-// UpdateTeamRequest.java
 package OrangeCloud.UserRepo.dto.team;
 
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UpdateTeamRequest {
-    @Size(min = 2, max = 100, message = "팀 이름은 2자 이상 100자 이하여야 합니다.")
-    private String name;
 
-    @Size(max = 500, message = "설명은 500자 이하여야 합니다.")
-    private String description;
+    @NotNull(message = "사용자 ID는 필수입니다.")
+    private UUID userId;
+
+    @NotNull(message = "그룹 ID는 필수입니다.")
+    private UUID groupId;
 }

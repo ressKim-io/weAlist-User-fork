@@ -1,249 +1,198 @@
-package OrangeCloud.UserRepo.service;
-
-import OrangeCloud.UserRepo.dto.project.*;
-import OrangeCloud.UserRepo.entity.Project;
-import OrangeCloud.UserRepo.entity.ProjectStatus;
-import OrangeCloud.UserRepo.entity.Team;
-import OrangeCloud.UserRepo.entity.User;
-import OrangeCloud.UserRepo.repository.ProjectRepository;
-import OrangeCloud.UserRepo.repository.TeamRepository;
-import OrangeCloud.UserRepo.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.Map;
-
-@Service
-@Transactional
-public class ProjectService {
-
-    private final ProjectRepository projectRepository;
-    private final TeamRepository teamRepository;
-    private final UserRepository userRepository;
-
-    @Autowired
-    public ProjectService(ProjectRepository projectRepository,
-                          TeamRepository teamRepository,
-                          UserRepository userRepository) {
-        this.projectRepository = projectRepository;
-        this.teamRepository = teamRepository;
-        this.userRepository = userRepository;
-    }
-
-    // 프로젝트 목록 조회 (필터링, 페이징)
-    public Page<ProjectResponse> getProjects(Long teamId, String status, boolean myProjects,
-                                             Authentication authentication, Pageable pageable) {
-        Page<Project> projects;
-
-        if (myProjects) {
-            User currentUser = getCurrentUser(authentication);
-            List<Long> teamIds = teamRepository.findTeamIdsByUserId(currentUser.getUserId());
-
-            if (teamIds.isEmpty()) {
-                return Page.empty(pageable);
-            }
-
-            projects = projectRepository.findByTeamIdInAndFilters(teamIds, teamId, status, pageable);
-        } else {
-            projects = projectRepository.findByFilters(teamId, status, pageable);
-        }
-
-        return projects.map(this::convertToProjectResponse);
-    }
-
-    // 프로젝트 생성
-    public ProjectResponse createProject(CreateProjectRequest request, Authentication authentication) {
-        User currentUser = getCurrentUser(authentication);
-
-        List<Team> teamMembers = teamRepository.findByTeamId(request.getTeamId());
-        if (teamMembers.isEmpty()) {
-            throw new RuntimeException("팀을 찾을 수 없습니다.");
-        }
-
-        boolean isMember = teamRepository.existsByTeamIdAndUserId(request.getTeamId(), currentUser.getUserId());
-        if (!isMember) {
-            throw new RuntimeException("해당 팀의 멤버만 프로젝트를 생성할 수 있습니다.");
-        }
-
-        Project project = new Project();
-        project.setTeamId(request.getTeamId());
-        project.setCreatedBy(currentUser.getUserId()); // UUID 직접 사용
-        project.setUserId(currentUser.getUserId());    // UUID 직접 사용
-        project.setStatus(ProjectStatus.INCOMPLETE);
-
-        Project savedProject = projectRepository.save(project);
-        return convertToProjectResponse(savedProject);
-    }
-
-    // 프로젝트 상세 조회
-    public ProjectResponse getProjectById(Long id) {
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("프로젝트를 찾을 수 없습니다."));
-
-        return convertToProjectResponse(project);
-    }
-
-    // 프로젝트 수정
-    public ProjectResponse updateProject(Long id, UpdateProjectRequest request, Authentication authentication) {
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("프로젝트를 찾을 수 없습니다."));
-
-        User currentUser = getCurrentUser(authentication);
-
-        // 권한 확인 (UUID 직접 비교)
-        boolean hasPermission = project.getCreatedBy().equals(currentUser.getUserId()) ||
-                teamRepository.isUserMemberOfTeam(project.getTeamId(), currentUser.getUserId());
-
-        if (!hasPermission) {
-            throw new RuntimeException("프로젝트를 수정할 권한이 없습니다.");
-        }
-
-        // 상태 업데이트
-        if (request.getStatus() != null) {
-            try {
-                ProjectStatus status = ProjectStatus.valueOf(request.getStatus().toUpperCase());
-                project.setStatus(status);
-            } catch (IllegalArgumentException e) {
-                throw new RuntimeException("유효하지 않은 상태값입니다.");
-            }
-        }
-
-        project.setUpdatedBy(currentUser.getUserId()); // UUID 직접 사용
-        Project savedProject = projectRepository.save(project);
-
-        return convertToProjectResponse(savedProject);
-    }
-
-    // 프로젝트 삭제
-    public void deleteProject(Long id, Authentication authentication) {
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("프로젝트를 찾을 수 없습니다."));
-
-        User currentUser = getCurrentUser(authentication);
-
-        // 권한 확인 (UUID 직접 비교)
-        if (!project.getCreatedBy().equals(currentUser.getUserId())) {
-            throw new RuntimeException("프로젝트를 삭제할 권한이 없습니다.");
-        }
-
-        projectRepository.delete(project);
-    }
-
-    // 프로젝트 타임라인 조회
-    public ProjectTimelineResponse getProjectTimeline(Long id) {
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("프로젝트를 찾을 수 없습니다."));
-
-        List<ProjectTimelineResponse.TimelineEvent> events = new ArrayList<>();
-
-        // 생성 이벤트 - UUID로 사용자 조회
-        User creator = getUserByUUID(project.getCreatedBy());
-        events.add(new ProjectTimelineResponse.TimelineEvent(
-                "CREATED",
-                "프로젝트가 생성되었습니다.",
-                creator != null ? creator.getName() : "Unknown",
-                project.getCreatedAt()
-        ));
-
-        // 수정 이벤트 (수정자가 있는 경우)
-        if (project.getUpdatedBy() != null && project.getUpdatedAt() != null) {
-            User updater = getUserByUUID(project.getUpdatedBy());
-            events.add(new ProjectTimelineResponse.TimelineEvent(
-                    "UPDATED",
-                    "프로젝트가 수정되었습니다.",
-                    updater != null ? updater.getName() : "Unknown",
-                    project.getUpdatedAt()
-            ));
-        }
-
-        // 상태 변경 이벤트
-        if (project.getStatus() == ProjectStatus.COMPLETE) {
-            User updater = project.getUpdatedBy() != null ?
-                    getUserByUUID(project.getUpdatedBy()) : null;
-            events.add(new ProjectTimelineResponse.TimelineEvent(
-                    "STATUS_CHANGED",
-                    "프로젝트가 완료 상태로 변경되었습니다.",
-                    updater != null ? updater.getName() : "Unknown",
-                    project.getUpdatedAt() != null ? project.getUpdatedAt() : project.getCreatedAt()
-            ));
-        }
-
-        return new ProjectTimelineResponse(id, events);
-    }
-
-    // 현재 사용자 조회
-    private User getCurrentUser(Authentication authentication) {
-        return userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
-    }
-
-    // UUID로 사용자 조회
-    private User getUserByUUID(UUID userId) {
-        return userRepository.findById(userId).orElse(null);
-    }
-
-    // Project를 ProjectResponse로 변환
-    private ProjectResponse convertToProjectResponse(Project project) {
-        // 팀 정보 조회
-        List<Team> teamMembers = teamRepository.findByTeamId(project.getTeamId());
-        String teamName = teamMembers.isEmpty() ? "Unknown Team" : "Team " + project.getTeamId();
-
-        // 팀 소유자 확인 (첫 번째 멤버)
-        UUID teamOwnerId;
-        if (!teamMembers.isEmpty()) {
-            teamOwnerId = teamMembers.get(0).getUserId();
-        } else {
-            teamOwnerId = null;
-        }
-
-        // 모든 팀 멤버의 UUID 수집
-        List<UUID> memberIds = teamMembers.stream()
-                .map(Team::getUserId)
-                .collect(Collectors.toList());
-
-        // 한 번의 쿼리로 모든 사용자 조회
-        List<User> users = userRepository.findAllById(memberIds);
-        Map<UUID, User> userMap = users.stream()
-                .collect(Collectors.toMap(User::getUserId, user -> user));
-
-        // 팀 멤버들의 상세 정보 생성
-        List<ProjectMemberResponse> memberResponses = teamMembers.stream()
-                .map(teamMember -> {
-                    User user = userMap.get(teamMember.getUserId());
-                    boolean isOwner = teamMember.getUserId().equals(teamOwnerId);
-                    return new ProjectMemberResponse(
-                            teamMember.getUserId(),
-                            user != null ? user.getName() : "Unknown",
-                            user != null ? user.getEmail() : "Unknown",
-                            isOwner
-                    );
-                })
-                .collect(Collectors.toList());
-
-        // 프로젝트 생성자와 수정자 정보 조회
-        User creator = getUserByUUID(project.getCreatedBy());
-        User updater = project.getUpdatedBy() != null ?
-                getUserByUUID(project.getUpdatedBy()) : null;
-
-        return new ProjectResponse(
-                project.getProjectId(),
-                project.getTeamId(),
-                teamName,
-                project.getUserId(),
-                creator != null ? creator.getName() : "Unknown",
-                updater != null ? updater.getName() : null,
-                project.getStatus().name(),
-                memberResponses, // 팀 멤버 목록
-                project.getCreatedAt(),
-                project.getUpdatedAt()
-        );
-    }
-}
+//package OrangeCloud.UserRepo.service;
+//
+//import OrangeCloud.UserRepo.entity.Project;
+//import OrangeCloud.UserRepo.entity.ProjectStatus;
+//import OrangeCloud.UserRepo.repository.ProjectRepository;
+//import lombok.RequiredArgsConstructor;
+//import lombok.extern.slf4j.Slf4j;
+//import org.springframework.stereotype.Service;
+//import org.springframework.transaction.annotation.Transactional;
+//
+//import java.math.BigInteger;
+//import java.time.LocalDateTime;
+//import java.util.List;
+//import java.util.Optional;
+//import java.util.UUID;
+//
+//@Service
+//@RequiredArgsConstructor
+//@Transactional
+//@Slf4j
+//public class ProjectService {
+//
+//    private final ProjectRepository projectRepository;
+//    private final TeamService teamService;
+//    // 프로젝트 생성
+//    public Project createProject(UUID teamId, UUID createdBy, ProjectStatus status) {
+//        log.info("Creating new project with teamId: {}, createdBy: {}, status: {}", teamId, createdBy, status);
+//
+//        Project project = Project.builder()
+//                .teamId(teamId)
+//                .createdBy(createdBy)
+//                .status(status)
+//                .isActive(true)
+//                .build();
+//
+//        Project savedProject = projectRepository.save(project);
+//        log.info("Created project with ID: {}", savedProject.getProjectId());
+//        return savedProject;
+//    }
+//
+//    // 소프트 삭제
+//    public boolean softDeleteProject(UUID projectId) {
+//        log.info("Soft deleting project with ID: {}", projectId);
+//        int updatedRows = projectRepository.softDeleteById(projectId);
+//        boolean success = updatedRows > 0;
+//        log.info("Project soft delete result: {}", success);
+//        return success;
+//    }
+//
+//    // 프로젝트 재활성화
+//    public boolean reactivateProject(UUID projectId) {
+//        log.info("Reactivating project with ID: {}", projectId);
+//        int updatedRows = projectRepository.reactivateById(projectId);
+//        boolean success = updatedRows > 0;
+//        log.info("Project reactivation result: {}", success);
+//        return success;
+//    }
+//
+//    // 활성화된 모든 프로젝트 조회
+//    @Transactional(readOnly = true)
+//    public List<Project> getAllActiveProjects() {
+//        log.debug("Fetching all active projects");
+//        return projectRepository.findAllActiveProjects();
+//    }
+//
+//    // ID로 활성화된 프로젝트 조회
+//    @Transactional(readOnly = true)
+//    public Optional<Project> getActiveProjectById(UUID projectId) {
+//        log.debug("Fetching active project by ID: {}", projectId);
+//        return projectRepository.findByProjectIdAndIsActiveTrue(projectId);
+//    }
+//
+//    // 팀별 활성화된 프로젝트 조회
+//    @Transactional(readOnly = true)
+//    public List<Project> getActiveProjectsByTeamId(UUID teamId) {
+//        log.debug("Fetching active projects by teamId: {}", teamId);
+//        return projectRepository.findActiveByTeamId(teamId);
+//    }
+//
+//    // 상태별 활성화된 프로젝트 조회
+//    @Transactional(readOnly = true)
+//    public List<Project> getActiveProjectsByStatus(ProjectStatus status) {
+//        log.debug("Fetching active projects by status: {}", status);
+//        return projectRepository.findActiveByStatus(status);
+//    }
+//
+//    // 생성자별 활성화된 프로젝트 조회
+//    @Transactional(readOnly = true)
+//    public List<Project> getActiveProjectsByCreatedBy(UUID createdBy) {
+//        log.debug("Fetching active projects by createdBy: {}", createdBy);
+//        return projectRepository.findActiveByCreatedBy(createdBy);
+//    }
+//
+//    // 프로젝트 정보 수정
+//    public Optional<Project> updateProject(UUID projectId, UUID teamId, String status, UUID updatedBy) {
+//        log.info("Updating project {} by user {} with teamId: {}, status: {}",
+//                projectId, updatedBy, teamId, status);
+//
+//        // 1. 프로젝트 존재 확인
+//        Optional<Project> projectOpt = projectRepository.findById(projectId);
+//        if (projectOpt.isEmpty()) {
+//            throw new IllegalArgumentException("프로젝트를 찾을 수 없습니다. Project ID: " + projectId);
+//        }
+//
+//        Project project = projectOpt.get();
+//
+//        // 2. 수정자가 해당 프로젝트의 팀에 속해있는지 확인
+//        if (!isUserInProjectTeam(project, updatedBy)) {
+//            throw new IllegalArgumentException("프로젝트 수정 권한이 없습니다. 해당 프로젝트의 팀 멤버만 수정할 수 있습니다.");
+//        }
+//
+//        // 3. 프로젝트 정보 업데이트
+//        boolean updated = false;
+//
+//        if (teamId != null && !teamId.equals(project.getTeamId())) {
+//            // 새로운 팀으로 변경하는 경우, 수정자가 새 팀에도 속해있는지 확인
+//            if (!teamService.isTeamMember(teamId, updatedBy)) {
+//                throw new IllegalArgumentException("새로운 팀에 대한 권한이 없습니다. 해당 팀의 멤버만 프로젝트를 할당할 수 있습니다.");
+//            }
+//            project.setTeamId(teamId);
+//            updated = true;
+//        }
+//
+//        if (status != null && !status.equals(project.getStatus())) {
+//            project.setStatus(ProjectStatus.valueOf(status));
+//            updated = true;
+//        }
+//
+//        if (updated) {
+//            project.setUpdatedBy(updatedBy);
+//            project.setUpdatedAt(LocalDateTime.now());
+//            Project savedProject = projectRepository.save(project);
+//            log.info("Project {} successfully updated by user {}", projectId, updatedBy);
+//            return Optional.of(savedProject);
+//        }
+//
+//        log.info("No changes made to project {}", projectId);
+//        return Optional.of(project);
+//    }
+//
+//    // 프로젝트 상태만 업데이트
+//    public boolean updateProjectStatus(UUID projectId, ProjectStatus status, UUID updatedBy) {
+//        log.info("Updating project status: {} to status: {}", projectId, status);
+//        int updatedRows = projectRepository.updateStatus(projectId, status, updatedBy);
+//        boolean success = updatedRows > 0;
+//        log.info("Project status update result: {}", success);
+//        return success;
+//    }
+//
+//    // 팀의 모든 프로젝트 비활성화
+//    public boolean softDeleteProjectsByTeamId(UUID teamId) {
+//        log.info("Soft deleting all projects for team: {}", teamId);
+//        int updatedRows = projectRepository.softDeleteByTeamId(teamId);
+//        boolean success = updatedRows > 0;
+//        log.info("Team projects soft delete result: {} projects affected", updatedRows);
+//        return success;
+//    }
+//
+//    // 활성화된 프로젝트 수 조회
+//    @Transactional(readOnly = true)
+//    public long getActiveProjectCount() {
+//        return projectRepository.countByIsActiveTrue();
+//    }
+//
+//    // 팀별 활성화된 프로젝트 수 조회
+//    @Transactional(readOnly = true)
+//    public long getActiveProjectCountByTeamId(UUID teamId) {
+//        return projectRepository.countActiveByTeamId(teamId);
+//    }
+//
+//    // 상태별 활성화된 프로젝트 수 조회
+//    @Transactional(readOnly = true)
+//    public long getActiveProjectCountByStatus(ProjectStatus status) {
+//        return projectRepository.countActiveByStatus(status);
+//    }
+//
+//    // 비활성화된 프로젝트 조회 (관리자용)
+//    @Transactional(readOnly = true)
+//    public List<Project> getInactiveProjects() {
+//        return projectRepository.findInactiveProjects();
+//    }
+//
+//    // 최근 생성된 활성화된 프로젝트 조회
+//    @Transactional(readOnly = true)
+//    public List<Project> getRecentActiveProjects(int days) {
+//        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
+//        return projectRepository.findActiveProjectsCreatedAfter(startDate);
+//    }
+//    private boolean isUserInProjectTeam(Project project, UUID userId) {
+//        if (project.getTeamId() == null) {
+//            // 팀이 할당되지 않은 프로젝트는 누구나 수정 가능하게 할지 결정
+//            return true; // 또는 false로 설정하여 팀이 있는 프로젝트만 수정 가능하게 할 수 있음
+//        }
+//
+//        // TeamService를 통해 사용자가 해당 팀의 멤버인지 확인
+//        return teamService.isTeamMember(project.getTeamId(), userId);
+//    }
+//}

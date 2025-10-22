@@ -1,267 +1,267 @@
 package OrangeCloud.UserRepo.service;
 
-import OrangeCloud.UserRepo.dto.team.TeamResponse;
-import OrangeCloud.UserRepo.dto.team.*;
+import OrangeCloud.UserRepo.entity.Group;
 import OrangeCloud.UserRepo.entity.Team;
 import OrangeCloud.UserRepo.entity.User;
-import OrangeCloud.UserRepo.entity.Group;
+import OrangeCloud.UserRepo.dto.team.CreateTeamRequest;
+import OrangeCloud.UserRepo.dto.team.TeamWithMembersResponse;
+import OrangeCloud.UserRepo.entity.UserInfo;
 import OrangeCloud.UserRepo.repository.TeamRepository;
+import OrangeCloud.UserRepo.repository.UserInfoRepository;
 import OrangeCloud.UserRepo.repository.UserRepository;
-import OrangeCloud.UserRepo.repository.GroupRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.Authentication;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class TeamService {
 
     private final TeamRepository teamRepository;
-    private final UserRepository userRepository;
-    private final GroupRepository groupRepository;
+    private final UserInfoRepository userInfoRepository;
+    private final GroupService groupService;
 
-    @Autowired
-    public TeamService(TeamRepository teamRepository,
-                       UserRepository userRepository,
-                       GroupRepository groupRepository) {
-        this.teamRepository = teamRepository;
-        this.userRepository = userRepository;
-        this.groupRepository = groupRepository;
-    }
+    // 팀 생성 시 팀장을 멤버로 자동 추가
+    public TeamWithMembersResponse createTeam(CreateTeamRequest request) {
+        log.info("Creating team: {}", request);
 
-    // 모든 팀 조회 (팀별로 그룹핑해서 반환)
-    public Page<TeamResponse> getAllTeams(Pageable pageable) {
-        List<Team> allTeamMemberships = teamRepository.findAll();
+        // 1. 팀장이 UserInfo에 존재하는지 확인
+        UserInfo leader = userInfoRepository.findByUserIdAndIsActiveTrue(request.getLeaderId())
+                .orElseThrow(() -> new IllegalArgumentException("팀장을 찾을 수 없습니다. User ID: " + request.getLeaderId()));
 
-        // groupId별로 팀 멤버십들을 그룹핑 (같은 groupId = 같은 팀)
-        Map<UUID, List<Team>> teamsByGroupId = allTeamMemberships.stream()
-                .collect(Collectors.groupingBy(Team::getGroupId));
-
-        // 각 그룹을 TeamResponse로 변환
-        List<TeamResponse> teamResponses = teamsByGroupId.entrySet().stream()
-                .map(entry -> convertToTeamResponse(entry.getKey(), entry.getValue()))
-                .collect(Collectors.toList());
-
-        // 페이징 처리
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), teamResponses.size());
-        List<TeamResponse> paginatedTeams = teamResponses.subList(start, end);
-
-        return new PageImpl<>(paginatedTeams, pageable, teamResponses.size());
-    }
-
-    // 내가 속한 팀 조회
-    public Page<TeamResponse> getMyTeams(Authentication authentication, Pageable pageable) {
-        User currentUser = getCurrentUser(authentication);
-
-        // 현재 사용자가 속한 팀 멤버십들 조회 (userId로 검색)
-        List<Team> myMemberships = teamRepository.findByUserId(currentUser.getUserId());
-
-        if (myMemberships.isEmpty()) {
-            return new PageImpl<>(new ArrayList<>(), pageable, 0);
-        }
-
-        // 내가 속한 팀들의 groupId 수집
-        Set<UUID> myTeamGroupIds = myMemberships.stream()
-                .map(Team::getGroupId)
-                .collect(Collectors.toSet());
-
-        // 해당 그룹들의 모든 멤버십 조회
-        List<Team> allMembershipsInMyTeams = teamRepository.findByGroupIdIn(myTeamGroupIds);
-
-        // groupId별로 그룹핑
-        Map<UUID, List<Team>> teamsByGroupId = allMembershipsInMyTeams.stream()
-                .collect(Collectors.groupingBy(Team::getGroupId));
-
-        // TeamResponse로 변환
-        List<TeamResponse> teamResponses = teamsByGroupId.entrySet().stream()
-                .map(entry -> convertToTeamResponse(entry.getKey(), entry.getValue()))
-                .collect(Collectors.toList());
-
-        // 페이징 처리
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), teamResponses.size());
-        List<TeamResponse> paginatedTeams = teamResponses.subList(start, end);
-
-        return new PageImpl<>(paginatedTeams, pageable, teamResponses.size());
-    }
-
-    // 팀 생성 (새로운 그룹 ID로 팀 생성)
-    public TeamResponse createTeam(CreateTeamRequest request, Authentication authentication) {
-        User owner = getCurrentUser(authentication);
-        UUID newTeamGroupId = UUID.randomUUID(); // 새로운 팀을 위한 그룹 ID 생성
-
-        // 팀 생성자를 첫 번째 멤버로 추가
-        Team ownerMembership = new Team();
-        ownerMembership.setUserId(owner.getUserId()); // 소유자의 UUID
-        ownerMembership.setGroupId(newTeamGroupId);   // 팀 그룹 ID
-
-        Team savedMembership = teamRepository.save(ownerMembership);
-
-        return convertToTeamResponse(newTeamGroupId, Arrays.asList(savedMembership));
-    }
-
-    // 특정 팀 조회
-    public TeamResponse getTeamById(UUID teamGroupId) {
-        List<Team> teamMemberships = teamRepository.findByGroupId(teamGroupId);
-
-        if (teamMemberships.isEmpty()) {
-            throw new RuntimeException("팀을 찾을 수 없습니다.");
-        }
-
-        return convertToTeamResponse(teamGroupId, teamMemberships);
-    }
-
-    // 팀 정보 수정
-    public TeamResponse updateTeam(UUID teamGroupId, UpdateTeamRequest request, Authentication authentication) {
-        List<Team> teamMemberships = teamRepository.findByGroupId(teamGroupId);
-
-        if (teamMemberships.isEmpty()) {
-            throw new RuntimeException("팀을 찾을 수 없습니다.");
-        }
-
-        User currentUser = getCurrentUser(authentication);
-
-        // 팀 소유자 확인 (첫 번째 멤버를 소유자로 간주하거나, 별도 로직 필요)
-        Team ownerMembership = teamMemberships.stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("팀 소유자를 찾을 수 없습니다."));
-
-        if (!ownerMembership.getUserId().equals(currentUser.getUserId())) {
-            throw new RuntimeException("팀 소유자만 팀 정보를 수정할 수 있습니다.");
-        }
-
-        // 실제 팀 정보 수정 로직 (Group 엔티티 업데이트 등)
-        return convertToTeamResponse(teamGroupId, teamMemberships);
-    }
-
-    // 팀원 추가
-    public void addTeamMember(UUID teamGroupId, AddTeamMemberRequest request, Authentication authentication) {
-        List<Team> teamMemberships = teamRepository.findByGroupId(teamGroupId);
-
-        if (teamMemberships.isEmpty()) {
-            throw new RuntimeException("팀을 찾을 수 없습니다.");
-        }
-
-        User currentUser = getCurrentUser(authentication);
-
-        // 권한 확인 (팀에 속한 사용자만 다른 사용자를 추가할 수 있다고 가정)
-        boolean hasPermission = teamMemberships.stream()
-                .anyMatch(membership -> membership.getUserId().equals(currentUser.getUserId()));
-
-        if (!hasPermission) {
-            throw new RuntimeException("팀원을 추가할 권한이 없습니다.");
-        }
-
-        User userToAdd = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
-
-        // 이미 팀원인지 확인
-        boolean alreadyMember = teamMemberships.stream()
-                .anyMatch(membership -> membership.getUserId().equals(request.getUserId()));
-
-        if (alreadyMember) {
-            throw new RuntimeException("이미 팀에 속한 사용자입니다.");
-        }
-
-        // 새 멤버십 생성
-        Team newMembership = new Team();
-        newMembership.setUserId(request.getUserId());
-        newMembership.setGroupId(teamGroupId);
-
-        teamRepository.save(newMembership);
-    }
-
-    // 팀원 제거
-    public void removeTeamMember(UUID teamGroupId, UUID userId, Authentication authentication) {
-        List<Team> teamMemberships = teamRepository.findByGroupId(teamGroupId);
-
-        if (teamMemberships.isEmpty()) {
-            throw new RuntimeException("팀을 찾을 수 없습니다.");
-        }
-
-        User currentUser = getCurrentUser(authentication);
-
-        // 제거할 멤버십 찾기
-        Team membershipToRemove = teamMemberships.stream()
-                .filter(membership -> membership.getUserId().equals(userId))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("해당 사용자는 팀에 속하지 않습니다."));
-
-        // 권한 확인: 팀의 첫 번째 멤버(소유자)이거나 자기 자신을 제거하는 경우
-        boolean isOwner = teamMemberships.get(0).getUserId().equals(currentUser.getUserId());
-        boolean isSelf = currentUser.getUserId().equals(userId);
-
-        if (!isOwner && !isSelf) {
-            throw new RuntimeException("팀원을 제거할 권한이 없습니다.");
-        }
-
-        // 팀 소유자(첫 번째 멤버)는 제거할 수 없음
-        if (teamMemberships.get(0).getUserId().equals(userId)) {
-            throw new RuntimeException("팀 소유자는 제거할 수 없습니다.");
-        }
-
-        teamRepository.delete(membershipToRemove);
-    }
-
-    // 현재 사용자 조회
-    private User getCurrentUser(Authentication authentication) {
-        return userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
-    }
-
-    // 팀 멤버십들을 TeamResponse로 변환
-    private TeamResponse convertToTeamResponse(UUID teamGroupId, List<Team> memberships) {
-        // 팀 소유자 찾기 (첫 번째 멤버를 소유자로 간주)
-        Team ownerMembership = memberships.stream()
-                .findFirst()
-                .orElse(null);
-
-        if (ownerMembership == null) {
-            throw new RuntimeException("팀 멤버를 찾을 수 없습니다.");
-        }
-
-        User owner = userRepository.findById(ownerMembership.getUserId()).orElse(null);
-
-        // 팀 멤버들 정보 생성
-        List<TeamMemberResponse> members = memberships.stream()
-                .map(this::convertToTeamMemberResponse)
-                .collect(Collectors.toList());
-
-        // Group 정보에서 팀 이름 가져오기
-        Group group = groupRepository.findById(teamGroupId).orElse(null);
-        String teamName = group != null ? group.getName() : "Team " + teamGroupId.toString().substring(0, 8);
-
-        return new TeamResponse(
-                teamGroupId,
-                teamName,
-                ownerMembership.getUserId(),
-                owner != null ? owner.getName() : "Unknown",
-                members,
-                LocalDateTime.now(), // 생성일시
-                LocalDateTime.now()  // 수정일시
+        // 2. 그룹 찾거나 생성
+        Group group = groupService.findOrCreateGroupByCompanyName(
+                request.getCompanyName(),
+                request.getGroupName() != null ? request.getGroupName() : request.getCompanyName()
         );
+
+        // 3. 팀 생성
+        Team team = Team.builder()
+                .teamName(request.getTeamName())
+                .groupId(group.getGroupId())
+                .leaderId(request.getLeaderId())
+                .description(request.getDescription())
+                .isActive(true)
+                .build();
+
+        // 4. 팀장을 멤버로 자동 추가
+        team.addMember(request.getLeaderId());
+
+        Team savedTeam = teamRepository.save(team);
+        log.info("Created team with ID: {} by user: {}", savedTeam.getTeamId(), request.getLeaderId());
+
+        // 5. 응답 생성
+        List<UserInfo> teamMembers = List.of(leader);
+
+        return TeamWithMembersResponse.builder()
+                .team(savedTeam)
+                .members(teamMembers)
+                .group(group)
+                .memberCount(1)
+                .build();
     }
 
-    // Team 멤버십을 TeamMemberResponse로 변환
-    private TeamMemberResponse convertToTeamMemberResponse(Team membership) {
-        User user = userRepository.findById(membership.getUserId()).orElse(null);
-        String role = "MEMBER"; // 기본값 (역할 구분이 없으므로)
+    // 팀에 멤버 추가 (다중 팀 가입 허용)
+    public UserInfo addMemberToTeam(UUID teamId, UUID requesterId, UUID userId, String role) {
+        log.info("Adding user {} to team {} by requester {}", userId, teamId, requesterId);
 
-        return new TeamMemberResponse(
-                membership.getUserId(),
-                user != null ? user.getName() : "Unknown",
-                user != null ? user.getEmail() : "Unknown",
-                role,
-                LocalDateTime.now() // 가입일시
-        );
+        // 1. 팀 확인
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("팀을 찾을 수 없습니다. Team ID: " + teamId));
+
+        // 2. 팀장 권한 확인
+        if (!team.getLeaderId().equals(requesterId)) {
+            throw new IllegalArgumentException("팀원 추가 권한이 없습니다. 팀장만 팀원을 추가할 수 있습니다.");
+        }
+
+        // 3. 추가할 사용자 확인
+        UserInfo userInfo = userInfoRepository.findByUserIdAndIsActiveTrue(userId)
+                .orElseThrow(() -> new IllegalArgumentException("추가할 사용자를 찾을 수 없습니다. User ID: " + userId));
+
+        // 4. 이미 해당 팀에 속해있는지 확인
+        if (team.hasMember(userId)) {
+            throw new IllegalArgumentException("사용자가 이미 해당 팀에 속해있습니다.");
+        }
+
+        // 5. 팀에 멤버 추가
+        team.addMember(userId);
+        teamRepository.save(team);
+
+        log.info("Successfully added user {} to team {} (user can be in multiple teams)", userId, teamId);
+        return userInfo;
+    }
+
+    // 팀에서 멤버 제거 (해당 팀에서만 제거)
+    public boolean removeMemberFromTeam(UUID teamId, UUID requesterId, UUID userId) {
+        log.info("Removing user {} from team {} by requester {}", userId, teamId, requesterId);
+
+        // 1. 팀 확인
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("팀을 찾을 수 없습니다. Team ID: " + teamId));
+
+        // 2. 팀장 권한 확인
+        if (!team.getLeaderId().equals(requesterId)) {
+            throw new IllegalArgumentException("팀원 제거 권한이 없습니다. 팀장만 팀원을 제거할 수 있습니다.");
+        }
+
+        // 3. 팀장 자신은 제거할 수 없음
+        if (team.getLeaderId().equals(userId)) {
+            throw new IllegalArgumentException("팀장은 자신을 팀에서 제거할 수 없습니다.");
+        }
+
+        // 4. 해당 팀에 속해있는지 확인
+        if (!team.hasMember(userId)) {
+            throw new IllegalArgumentException("사용자가 해당 팀에 속해있지 않습니다.");
+        }
+
+        // 5. 팀에서 멤버 제거 (다른 팀에는 영향 없음)
+        team.removeMember(userId);
+        teamRepository.save(team);
+
+        log.info("Successfully removed user {} from team {} (other team memberships unaffected)", userId, teamId);
+        return true;
+    }
+
+    // 특정 팀의 멤버 목록 조회
+    public List<UserInfo> getTeamMembers(UUID teamId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new EntityNotFoundException("팀을 찾을 수 없습니다."));
+
+        List<UUID> memberIds = team.getMemberIdsList();
+        if (memberIds.isEmpty()) {
+            return List.of();
+        }
+
+        return userInfoRepository.findAllById(memberIds).stream()
+                .filter(user -> user.getIsActive())
+                .collect(Collectors.toList());
+    }
+
+    // 팀 멤버 수 조회
+    public long getTeamMemberCount(UUID teamId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new EntityNotFoundException("팀을 찾을 수 없습니다."));
+
+        return team.getMemberIdsList().size();
+    }
+
+    // 사용자가 속한 모든 팀 조회
+    public List<Team> getUserTeams(UUID userId) {
+        // 모든 활성 팀에서 해당 사용자를 멤버로 가진 팀들 찾기
+        return teamRepository.findAllActiveTeams().stream()
+                .filter(team -> team.hasMember(userId))
+                .collect(Collectors.toList());
+    }
+
+    // 사용자가 팀장인 팀들 조회
+    public List<Team> getTeamsLedByUser(UUID userId) {
+        return teamRepository.findActiveByLeaderId(userId);
+    }
+
+    // 모든 활성 사용자를 팀에 추가 가능 (중복 가입 허용)
+    public List<UserInfo> getAvailableUsersForTeam(UUID teamId) {
+        return userInfoRepository.findAllActiveUsers();
+    }
+
+    // 사용자가 특정 팀의 멤버인지 확인
+    public boolean isTeamMember(UUID teamId, UUID userId) {
+        Optional<Team> teamOpt = teamRepository.findById(teamId);
+        return teamOpt.map(team -> team.hasMember(userId)).orElse(false);
+    }
+
+    // 나머지 기존 메서드들...
+    public List<Team> getAllActiveTeams() {
+        return teamRepository.findAllActiveTeams();
+    }
+
+    public Optional<Team> getActiveTeamById(UUID teamId) {
+        return teamRepository.findByTeamIdAndIsActiveTrue(teamId);
+    }
+
+    public List<Team> getActiveTeamsByGroupId(UUID groupId) {
+        return teamRepository.findActiveByGroupId(groupId);
+    }
+
+    public List<Team> getActiveTeamsByLeaderId(UUID leaderId) {
+        return teamRepository.findActiveByLeaderId(leaderId);
+    }
+
+    public boolean isTeamLeader(UUID teamId, UUID userId) {
+        Optional<Team> team = getActiveTeamById(teamId);
+        return team.isPresent() && team.get().getLeaderId().equals(userId);
+    }
+
+    public Team updateTeam(UUID teamId, UUID requesterId, String newTeamName, String newDescription) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new EntityNotFoundException("팀을 찾을 수 없습니다."));
+
+        if (!team.getLeaderId().equals(requesterId)) {
+            throw new IllegalArgumentException("팀 수정 권한이 없습니다.");
+        }
+
+        if (newTeamName != null) {
+            team.setTeamName(newTeamName);
+        }
+        if (newDescription != null) {
+            team.setDescription(newDescription);
+        }
+
+        return teamRepository.save(team);
+    }
+
+    public Team changeTeamLeader(UUID teamId, UUID currentLeaderId, UUID newLeaderId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new EntityNotFoundException("팀을 찾을 수 없습니다."));
+
+        if (!team.getLeaderId().equals(currentLeaderId)) {
+            throw new IllegalArgumentException("팀장 변경 권한이 없습니다.");
+        }
+
+        // 새 팀장이 활성 사용자인지 확인
+        UserInfo newLeader = userInfoRepository.findByUserIdAndIsActiveTrue(newLeaderId)
+                .orElseThrow(() -> new IllegalArgumentException("새 팀장을 찾을 수 없습니다."));
+
+        // 새 팀장을 팀 멤버로 추가 (아직 멤버가 아니라면)
+        if (!team.hasMember(newLeaderId)) {
+            team.addMember(newLeaderId);
+        }
+
+        team.setLeaderId(newLeaderId);
+        return teamRepository.save(team);
+    }
+
+    public boolean disbandTeam(UUID teamId, UUID requesterId) {
+        log.info("Disbanding team {} by requester {}", teamId, requesterId);
+
+        Optional<Team> teamOpt = getActiveTeamById(teamId);
+        if (teamOpt.isEmpty()) {
+            throw new IllegalArgumentException("팀을 찾을 수 없습니다. Team ID: " + teamId);
+        }
+
+        Team team = teamOpt.get();
+
+        if (!team.getLeaderId().equals(requesterId)) {
+            throw new IllegalArgumentException("팀 해산 권한이 없습니다. 팀장만 팀을 해산할 수 있습니다.");
+        }
+
+        try {
+            teamRepository.deleteById(teamId);
+            log.info("Successfully disbanded team {} (UserInfo members remain unaffected)", teamId);
+            return true;
+        } catch (Exception e) {
+            log.error("Error disbanding team {}", teamId, e);
+            return false;
+        }
     }
 }
