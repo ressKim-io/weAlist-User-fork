@@ -1,9 +1,9 @@
 spring:
   application:
-    name: ${APP_NAME:UserRepo}
+    name: ${APP_NAME}
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:wealist_db}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -11,10 +11,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
-    show-sql: ${JPA_SHOW_SQL:true}
+    show-sql: ${JPA_SHOW_SQL}
     properties:
       hibernate:
-        format_sql: ${JPA_FORMAT_SQL:true}
+        format_sql: ${JPA_FORMAT_SQL}
     database-platform: ${JPA_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
 
 #  data:
@@ -31,6 +31,15 @@ springdoc:
     display-request-duration: true
     disable-swagger-default-url: true
 
+server:
+  tomcat:
+    accesslog:
+      enabled: true
+      pattern: "%t %a \"%r\" %s (%D ms)"
+
+
 app:
   jwt-secret: ${JWT_SECRET}
-  jwt-expiration-ms: ${JWT_EXPIRATION_MS}
+  JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
+  JWT_ACCESS_MS: ${JWT_ACCESS_MS}
+  jwt.access.in.ms: ${JWT_ACCESS_MS}

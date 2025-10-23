@@ -1,5 +1,37 @@
 
 services:
+  app:
+    build: .
+    container_name: weAlist-user
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      - APP_NAME=${APP_NAME}
+      - JPA_DDL_AUTO=${JPA_DDL_AUTO}
+      - JPA_SHOW_SQL=${JPA_SHOW_SQL}
+      - JPA_FORMAT_SQL=${JPA_FORMAT_SQL}
+      - JPA_DIALECT=${JPA_DIALECT}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
+      - JWT_ACCESS_MS=${JWT_ACCESS_MS}
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=${REDIS_PORT}
+      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      - postgres
+      - redis
+
+    networks:
+      - wealist-network
+    restart: unless-stopped
+
+
+
   postgres:
     image: postgres:16-alpine
     container_name: wealist-postgres
@@ -12,7 +44,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT}"
     networks:
       - wealist-network
     healthcheck:
@@ -31,7 +63,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT}"
     networks:
       - wealist-network
     restart: unless-stopped

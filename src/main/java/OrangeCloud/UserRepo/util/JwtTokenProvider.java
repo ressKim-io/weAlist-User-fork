@@ -2,6 +2,7 @@ package OrangeCloud.UserRepo.util;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,11 +16,18 @@ public class JwtTokenProvider {
 
     private final SecretKey key;
     private final int jwtExpirationInMs;
-    private static final long REFRESH_TOKEN_EXPIRE_TIME = 1000L * 60 * 60 * 24 * 7; // 7일
+    private static long REFRESH_TOKEN_EXPIRE_TIME;
+
+    @Value("${app.JWT_ACCESS_MS}")
+    private long refreshTokenExpireTime;
+    @PostConstruct
+    public void init() {
+        REFRESH_TOKEN_EXPIRE_TIME = refreshTokenExpireTime;
+    }
 
     public JwtTokenProvider(
             @Value("${app.jwt-secret}") String jwtSecret,
-            @Value("${app.jwt-expiration-ms:604800000}") int jwtExpirationInMs) {
+            @Value("${app.JWT_EXPIRATION_MS}") int jwtExpirationInMs) {
 
         if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
             throw new IllegalArgumentException("JWT Secret이 설정되지 않았습니다. .env 또는 application.yml을 확인하세요.");
