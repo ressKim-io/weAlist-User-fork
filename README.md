@@ -87,7 +87,7 @@ open http://localhost:8080/swagger-ui.html
 ### 문서
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - API Docs: http://localhost:8080/v3/api-docs
-- Health Check: http://localhost:8080/actuator/health
+- Health Check: http://localhost:8080/health
 
 ### 주요 API
 | 엔드포인트                 | 설명         | 인증     |
