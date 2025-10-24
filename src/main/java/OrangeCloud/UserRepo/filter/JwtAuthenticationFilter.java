@@ -1,0 +1,80 @@
+package OrangeCloud.UserRepo.filter;
+
+import OrangeCloud.UserRepo.service.AuthService;
+import OrangeCloud.UserRepo.util.JwtTokenProvider;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.UUID;
+
+/**
+ * JWT 토큰 인증 필터
+ * 모든 HTTP 요청에 대해 JWT 토큰을 검증하고 사용자 인증을 처리합니다.
+ */
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthService authService;
+
+    @Autowired
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider, AuthService authService) {
+        this.jwtTokenProvider = jwtTokenProvider;
+        this.authService = authService;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+        try {
+            // 요청에서 JWT 토큰 추출
+            String jwt = getJwtFromRequest(request);
+
+            // 토큰이 존재하고 유효한 경우
+            if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
+                // 토큰이 블랙리스트에 있는지 확인
+                if (!authService.isTokenBlacklisted(jwt)) {
+                    // 토큰에서 사용자 ID 추출
+                    UUID userId = jwtTokenProvider.getUserIdFromToken(jwt);
+
+                    // Authentication 객체 생성 (권한은 빈 리스트로 설정)
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // Security Context에 인증 정보 설정
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            }
+        } catch (Exception ex) {
+            logger.error("Security Context에서 사용자 인증을 설정할 수 없습니다", ex);
+        }
+
+        // 다음 필터로 요청 전달
+        filterChain.doFilter(request, response);
+    }
+
+    /**
+     * HTTP 요청 헤더에서 JWT 토큰을 추출합니다.
+     * Authorization 헤더의 "Bearer " 접두사를 제거하고 토큰을 반환합니다.
+     */
+    private String getJwtFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+}
