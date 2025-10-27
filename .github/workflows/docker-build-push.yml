@@ -64,3 +64,12 @@ jobs:
         run: |
           echo "Image pushed successfully!"
           echo "Tags: latest, ${{ steps.version.outputs.version }}, ${{ github.sha }}"
+
+      - name: Trigger deployment workflow
+        if: success()
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.DEPLOY_TRIGGER_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/ressKim-io/wealist-deploy-test/dispatches \
+            -d '{"event_type":"new-image-pushed","client_payload":{"service":"user","version":"${{ steps.version.outputs.version }}","commit":"${{ github.sha }}","actor":"${{ github.actor }}"}}'
