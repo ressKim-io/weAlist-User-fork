@@ -30,7 +30,7 @@ public class JwtTokenProvider {
     }
 
     public JwtTokenProvider(
-            @Value("${app.jwt-secret}") String jwtSecret,
+            @Value("${jwt.secret}") String jwtSecret,
             @Value("${app.JWT_EXPIRATION_MS}") int jwtExpirationInMs) {
 
         if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
