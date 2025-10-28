@@ -145,4 +145,4 @@ docker exec -it wealist-user-redis redis-cli
 
 ## 라이선스
 
-이 프로젝트는 학습 목적으로 개발되었습니다.
+이 프로젝트는 학습 목적으로 개발되었습니다!
