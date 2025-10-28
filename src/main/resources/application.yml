@@ -35,10 +35,10 @@ springdoc:
     disable-swagger-default-url: true
 
 server:
-  tomcat:
-    accesslog:
-      enabled: true
-      pattern: "%t %a \"%r\" %s (%D ms)"
+  port: ${USER_SERVICE_PORT}
+  error:
+    whitelabel.enabled: false
+    include-exception: true
 
 
 app:
