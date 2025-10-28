@@ -31,7 +31,7 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(
             @Value("${jwt.secret}") String jwtSecret,
-            @Value("${app.JWT_EXPIRATION_MS}") int jwtExpirationInMs) {
+            @Value("${jwt.expiration-ms}") int jwtExpirationInMs) {
 
         if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
             throw new IllegalArgumentException("JWT Secret이 설정되지 않았습니다. .env 또는 application.yml을 확인하세요.");
