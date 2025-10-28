@@ -53,8 +53,10 @@ public class RateLimitingService {
         // 속도 제한 초과 여부 확인
         if (count > limit) {
             logger.warn("Rate limit exceeded for key: {}. Count: {}, Limit: {}", key, count, limit);
+            System.out.println("RATE LIMIT EXCEEDED: Key=" + key + ", Count=" + count + ", Limit=" + limit); // Debug print
             throw new CustomException(ErrorCode.METHOD_NOT_ALLOWED, "요청 횟수를 초과했습니다. 잠시 후 다시 시도해주세요.");
         }
         logger.debug("Rate limit check passed for key: {}. Count: {}, Limit: {}", key, count, limit);
+        System.out.println("RATE LIMIT PASSED: Key=" + key + ", Count=" + count + ", Limit=" + limit); // Debug print
     }
 }
