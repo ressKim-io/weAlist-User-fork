@@ -33,6 +33,30 @@
 Authorization: Bearer {access_token}
 ```
 
+### JWT 인증 에러 응답
+
+토큰 인증 실패 시, 클라이언트는 HTTP `401 Unauthorized` 상태 코드와 함께 다음 형식의 JSON 응답을 받게 됩니다. 프론트엔드에서는 `code` 필드를 사용하여 에러의 원인을 파악하고 후속 조치(예: 토큰 재발급 요청, 로그인 페이지로 리디렉션)를 수행할 수 있습니다.
+
+**응답 형식 예시 (`J002: 토큰 만료`):**
+```json
+{
+  "status": 401,
+  "code": "J002",
+  "message": "Expired JWT token"
+}
+```
+
+**주요 JWT 에러 코드:**
+
+| 코드 (code) | 메시지 (message) | 설명 및 클라이언트 조치 방안 |
+| :--- | :--- | :--- |
+| `J001` | Invalid JWT token | 유효하지 않은 토큰 형식입니다. 토큰이 잘못되었거나 손상되었을 수 있습니다. | 
+| `J002` | Expired JWT token | 토큰이 만료되었습니다. 클라이언트는 `POST /api/auth/refresh`를 통해 토큰 재발급을 시도해야 합니다. | 
+| `J003` | Unsupported JWT token | 지원되지 않는 형식의 토큰입니다. | 
+| `J004` | Malformed JWT token | 구조가 잘못된 토큰입니다. | 
+| `J006` | JWT signature is invalid | 서명이 유효하지 않은, 변조되었을 가능성이 있는 토큰입니다. | 
+| `J007` | JWT token is blacklisted | 로그아웃 처리된 토큰입니다. 사용자는 다시 로그인해야 합니다. | 
+
 ### 인증이 필요 없는 엔드포인트
 - `POST /api/auth/signup` - 회원가입
 - `POST /api/auth/login` - 로그인

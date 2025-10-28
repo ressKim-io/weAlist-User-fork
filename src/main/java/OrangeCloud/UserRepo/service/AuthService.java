@@ -10,7 +10,6 @@ import OrangeCloud.UserRepo.util.JwtTokenProvider;
 import OrangeCloud.UserRepo.exception.EmailAlreadyExistsException;
 import OrangeCloud.UserRepo.exception.UserNotFoundException;
 import OrangeCloud.UserRepo.exception.InvalidPasswordException;
-import OrangeCloud.UserRepo.exception.InvalidTokenException;
 import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Date; // Added
+import java.util.Date;
 import java.util.UUID;
 
 @Service
@@ -104,11 +103,8 @@ public class AuthService {
     public void logout(String token) {
         logger.debug("Attempting to log out token: {}", token);
 
-        // 토큰 유효성 검사
-        if (!tokenProvider.validateToken(token)) {
-            logger.warn("Logout failed: Invalid token provided.");
-            throw new InvalidTokenException("유효하지 않은 토큰입니다.");
-        }
+        // 토큰 유효성 검사 (실패 시 CustomJwtException 발생)
+        tokenProvider.validateToken(token);
 
         // 토큰을 Redis 블랙리스트에 추가 (만료 시간과 함께)
         Date expirationDate = tokenProvider.getExpirationDateFromToken(token);
@@ -126,19 +122,17 @@ public class AuthService {
         logger.debug("Attempting to refresh token.");
 
         // Refresh 토큰 유효성 검사
-        if (!tokenProvider.validateRefreshToken(refreshToken)) {
-            logger.warn("Refresh token failed: Invalid refresh token provided.");
-            throw new InvalidTokenException("유효하지 않은 refresh token입니다.");
-        }
+        tokenProvider.validateToken(refreshToken);
 
         // Check if the old refresh token is blacklisted
         if (isTokenBlacklisted(refreshToken)) {
             logger.warn("Refresh token failed: Provided refresh token is blacklisted.");
-            throw new InvalidTokenException("블랙리스트에 등록된 refresh token입니다.");
+            // 여기서 CustomJwtException을 던지는 것이 일관성에 맞습니다.
+            throw new OrangeCloud.UserRepo.exception.CustomJwtException(OrangeCloud.UserRepo.exception.ErrorCode.TOKEN_BLACKLISTED);
         }
 
         // Refresh 토큰에서 사용자 ID 추출
-        UUID userId = tokenProvider.getUserIdFromRefreshToken(refreshToken);
+        UUID userId = tokenProvider.getUserIdFromToken(refreshToken);
         logger.debug("Extracted user ID {} from refresh token.", userId);
 
         // 사용자 존재 여부 확인

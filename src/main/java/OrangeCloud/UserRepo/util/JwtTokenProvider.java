@@ -1,12 +1,13 @@
 package OrangeCloud.UserRepo.util;
 
+import OrangeCloud.UserRepo.exception.CustomJwtException;
+import OrangeCloud.UserRepo.exception.ErrorCode;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
-import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -19,45 +20,27 @@ public class JwtTokenProvider {
     private static final Logger logger = LoggerFactory.getLogger(JwtTokenProvider.class);
 
     private final SecretKey key;
-    private final int jwtExpirationInMs;
-    private static long REFRESH_TOKEN_EXPIRE_TIME;
-
-    @Value("${app.JWT_ACCESS_MS}")
-    private long refreshTokenExpireTime;
-    @PostConstruct
-    public void init() {
-        REFRESH_TOKEN_EXPIRE_TIME = refreshTokenExpireTime;
-    }
+    private final long accessTokenExpirationMs;
+    private final long refreshTokenExpirationMs;
 
     public JwtTokenProvider(
             @Value("${jwt.secret}") String jwtSecret,
-            @Value("${jwt.expiration-ms}") int jwtExpirationInMs) {
+            @Value("${jwt.access-token-expiration-ms}") long accessTokenExpirationMs,
+            @Value("${jwt.refresh-token-expiration-ms}") long refreshTokenExpirationMs) {
 
         if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
             throw new IllegalArgumentException("JWT Secret이 설정되지 않았습니다. .env 또는 application.yml을 확인하세요.");
         }
 
         this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        this.jwtExpirationInMs = jwtExpirationInMs;
+        this.accessTokenExpirationMs = accessTokenExpirationMs;
+        this.refreshTokenExpirationMs = refreshTokenExpirationMs;
     }
 
-    // Access Token 생성 (UUID 버전)
+    // Access Token 생성
     public String generateToken(UUID userId) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
-
-        return Jwts.builder()
-                .setSubject(userId.toString())
-                .setIssuedAt(now)
-                .setExpiration(expiryDate)
-                .signWith(key, SignatureAlgorithm.HS512)
-                .compact();
-    }
-
-    // Access Token 생성 (Long 버전)
-    public String generateToken(Long userId) {
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
+        Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
 
         return Jwts.builder()
                 .setSubject(userId.toString())
@@ -70,7 +53,7 @@ public class JwtTokenProvider {
     // Refresh Token 생성
     public String generateRefreshToken(UUID userId) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + REFRESH_TOKEN_EXPIRE_TIME);
+        Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
                 .setSubject(userId.toString())
@@ -80,36 +63,29 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // Token 유효성 검사
-    public boolean validateToken(String token) {
+    // Token 유효성 검사 (Access/Refresh 공통 사용)
+    public void validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            logger.error("Invalid JWT signature: {}", e.getMessage());
+            throw new CustomJwtException(ErrorCode.TOKEN_SIGNATURE_INVALID);
+        } catch (MalformedJwtException e) {
+            logger.error("Invalid JWT token: {}", e.getMessage());
+            throw new CustomJwtException(ErrorCode.MALFORMED_TOKEN);
+        } catch (ExpiredJwtException e) {
+            logger.error("Expired JWT token: {}", e.getMessage());
+            throw new CustomJwtException(ErrorCode.EXPIRED_TOKEN);
+        } catch (UnsupportedJwtException e) {
+            logger.error("Unsupported JWT token: {}", e.getMessage());
+            throw new CustomJwtException(ErrorCode.UNSUPPORTED_TOKEN);
+        } catch (IllegalArgumentException e) {
+            logger.error("JWT claims string is empty: {}", e.getMessage());
+            throw new CustomJwtException(ErrorCode.INVALID_TOKEN);
         }
     }
 
-    // Refresh Token 유효성 검사
-    public boolean validateRefreshToken(String token) {
-        try {
-            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
-            return true;
-        } catch (io.jsonwebtoken.ExpiredJwtException ex) {
-            logger.error("Expired JWT refresh token: {}", ex.getMessage());
-        } catch (io.jsonwebtoken.UnsupportedJwtException ex) {
-            logger.error("Unsupported JWT refresh token: {}", ex.getMessage());
-        } catch (io.jsonwebtoken.MalformedJwtException ex) {
-            logger.error("Invalid JWT refresh token: {}", ex.getMessage());
-        } catch (io.jsonwebtoken.security.SignatureException ex) {
-            logger.error("Invalid JWT refresh token signature: {}", ex.getMessage());
-        } catch (IllegalArgumentException ex) {
-            logger.error("JWT refresh token compact of handler are invalid: {}", ex.getMessage());
-        }
-        return false;
-    }
-
-    // Access Token에서 사용자 ID 추출
+    // Token에서 사용자 ID 추출
     public UUID getUserIdFromToken(String token) {
         try {
             Claims claims = Jwts.parserBuilder()
@@ -118,36 +94,9 @@ public class JwtTokenProvider {
                     .parseClaimsJws(token)
                     .getBody();
             return UUID.fromString(claims.getSubject());
-        } catch (JwtException | IllegalArgumentException e) {
-            throw new RuntimeException("유효하지 않은 JWT 토큰입니다.", e);
-        }
-    }
-
-    // Refresh Token에서 사용자 ID 추출
-    public UUID getUserIdFromRefreshToken(String token) {
-        try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
-            return UUID.fromString(claims.getSubject());
-        } catch (JwtException | IllegalArgumentException e) {
-            throw new RuntimeException("유효하지 않은 Refresh Token입니다.", e);
-        }
-    }
-
-    // Token 만료 여부 확인
-    public boolean isTokenExpired(String token) {
-        try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
-            return claims.getExpiration().before(new Date());
-        } catch (JwtException | IllegalArgumentException e) {
-            return true;
+        } catch (Exception e) {
+            // validateToken에서 이미 예외를 던지므로, 이 부분은 심각한 오류 상황
+            throw new CustomJwtException(ErrorCode.INVALID_TOKEN);
         }
     }
 
@@ -160,8 +109,11 @@ public class JwtTokenProvider {
                     .parseClaimsJws(token)
                     .getBody();
             return claims.getExpiration();
-        } catch (JwtException | IllegalArgumentException e) {
-            throw new RuntimeException("유효하지 않은 JWT 토큰입니다.", e);
+        } catch (ExpiredJwtException e) {
+            // 만료된 토큰이라도 만료 시간은 가져올 수 있음
+            return e.getClaims().getExpiration();
+        } catch (Exception e) {
+            throw new CustomJwtException(ErrorCode.INVALID_TOKEN);
         }
     }
 }

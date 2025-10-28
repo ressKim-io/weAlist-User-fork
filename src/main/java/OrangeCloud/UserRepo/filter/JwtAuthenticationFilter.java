@@ -38,28 +38,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        try {
-            // 요청에서 JWT 토큰 추출
-            String jwt = getJwtFromRequest(request);
 
-            // 토큰이 존재하고 유효한 경우
-            if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
-                // 토큰이 블랙리스트에 있는지 확인
-                if (!authService.isTokenBlacklisted(jwt)) {
-                    // 토큰에서 사용자 ID 추출
-                    UUID userId = jwtTokenProvider.getUserIdFromToken(jwt);
+        String jwt = getJwtFromRequest(request);
 
-                    // Authentication 객체 생성 (권한은 빈 리스트로 설정)
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        // 토큰이 존재하고, Security Context에 이미 인증 정보가 없는 경우
+        if (StringUtils.hasText(jwt) && SecurityContextHolder.getContext().getAuthentication() == null) {
+            // 토큰 유효성 검사 (실패 시 CustomJwtException 발생)
+            jwtTokenProvider.validateToken(jwt);
 
-                    // Security Context에 인증 정보 설정
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
+            // 토큰이 블랙리스트에 있는지 확인
+            if (!authService.isTokenBlacklisted(jwt)) {
+                // 토큰에서 사용자 ID 추출
+                UUID userId = jwtTokenProvider.getUserIdFromToken(jwt);
+
+                // Authentication 객체 생성 (권한은 빈 리스트로 설정)
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                // Security Context에 인증 정보 설정
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
-        } catch (Exception ex) {
-            logger.error("Security Context에서 사용자 인증을 설정할 수 없습니다", ex);
         }
 
         // 다음 필터로 요청 전달

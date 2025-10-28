@@ -41,11 +41,10 @@ server:
     include-exception: true
 
 
-app:
-  jwt-secret: ${JWT_SECRET}
-  JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
-  JWT_ACCESS_MS: ${JWT_ACCESS_MS}
-  jwt.access.in.ms: ${JWT_ACCESS_MS}
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration-ms: ${JWT_EXPIRATION_MS}
+  refresh-token-expiration-ms: ${JWT_ACCESS_MS}
 
 logging:
   level:

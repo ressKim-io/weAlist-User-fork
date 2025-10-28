@@ -1,6 +1,7 @@
 package OrangeCloud.UserRepo.config;
 
 import OrangeCloud.UserRepo.filter.JwtAuthenticationFilter;
+import OrangeCloud.UserRepo.filter.JwtExceptionFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,10 +23,12 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtExceptionFilter jwtExceptionFilter;
 
     @Autowired
-    public SecurityConfig(@Lazy JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(@Lazy JwtAuthenticationFilter jwtAuthenticationFilter, JwtExceptionFilter jwtExceptionFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.jwtExceptionFilter = jwtExceptionFilter;
     }
 
     @Bean
@@ -52,6 +55,8 @@ public class SecurityConfig {
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()
                 )
+                // JWT 예외 처리 필터를 JWT 인증 필터 앞에 추가
+                .addFilterBefore(jwtExceptionFilter, JwtAuthenticationFilter.class)
                 // JWT 인증 필터 추가
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .headers(headers -> headers
