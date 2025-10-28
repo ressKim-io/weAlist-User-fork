@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import OrangeCloud.UserRepo.exception.InvalidTokenException;
 import OrangeCloud.UserRepo.exception.ErrorCode;
 import OrangeCloud.UserRepo.service.RateLimitingService;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -98,9 +99,10 @@ public class AuthController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
     public ResponseEntity<UserInfoResponse> getCurrentUser(Authentication authentication) {
-        logger.debug("Received request to get current user info for: {}", authentication.getName());
-        UserInfoResponse userInfo = authService.getCurrentUserInfo(authentication.getName());
-        logger.info(MessageCode.USER_INFO_RETRIEVED_SUCCESS.getMessage() + ": {}", authentication.getName());
+        UUID userId = UUID.fromString(authentication.getName()); // Convert principal name (UUID string) to UUID
+        logger.debug("Received request to get current user info for ID: {}", userId);
+        UserInfoResponse userInfo = authService.getCurrentUserInfo(userId); // Pass UUID
+        logger.info(MessageCode.USER_INFO_RETRIEVED_SUCCESS.getMessage() + ": {}", userId);
         return ResponseEntity.ok(userInfo);
     }
 

@@ -166,13 +166,13 @@ public class AuthService {
         return new AuthResponse(newAccessToken, newRefreshToken, user.getUserId(), user.getName(), user.getEmail());
     }
 
-    @Cacheable(value = "userInfo", key = "#email")
-    public UserInfoResponse getCurrentUserInfo(String email) {
-        logger.debug("Attempting to get user info for email: {} (from cache or DB)", email);
+    @Cacheable(value = "userInfo", key = "#userId")
+    public UserInfoResponse getCurrentUserInfo(UUID userId) {
+        logger.debug("Attempting to get user info for ID: {} (from cache or DB)", userId);
 
-        User user = userRepository.findByEmailAndIsActiveTrue(email)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    logger.warn("User info retrieval failed: User not found for email: {}", email);
+                    logger.warn("User info retrieval failed: User not found for ID: {}", userId);
                     return new UserNotFoundException("사용자를 찾을 수 없습니다.");
                 });
 
