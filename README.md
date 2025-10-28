@@ -79,6 +79,16 @@ docker-compose up -d --build wealist-user-service
 docker logs -f wealist-user-service
 ```
 
+### 🐳 Docker 이미지 빌드 (Docker Image Build)
+
+이 프로젝트의 `Dockerfile`은 프로덕션 환경에 최적화된 멀티스테이지 빌드를 사용합니다. 이 방법을 사용하면 로컬에 Java나 Gradle을 설치하지 않고도 소스 코드에서 직접 Docker 이미지를 빌드할 수 있습니다.
+
+```bash
+# 프로젝트 루트에서 Docker 이미지 빌드
+# <tag>는 원하는 태그로 지정합니다 (예: wealist-user:latest)
+docker build -t <tag> .
+```
+
 ## 프로젝트 구조
 
 ```

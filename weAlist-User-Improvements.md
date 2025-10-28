@@ -1,35 +1,5 @@
 # weAlist User Service 개선점 및 진행 상황
 
-## ✅ 완료된 작업 요약
-
-1.  **초기 403 오류 해결**:
-    *   `JWT_SECRET` 길이 문제로 인한 403 오류를 해결했습니다.
-    *   새로운 512비트 이상의 `JWT_SECRET`을 생성하여 `weAlist-deploy/.env` 파일을 업데이트했습니다.
-
-2.  **구조화된 예외 처리 구현**:
-    *   `ErrorCode` enum, `CustomException`, `ErrorResponse` DTO, `GlobalExceptionHandler`를 구현하여 일관된 오류 응답을 제공하도록 했습니다.
-    *   `AuthService`와 `AuthController`를 리팩토링하여 이 새로운 예외 처리 방식을 사용하도록 변경했습니다.
-
-3.  **로깅 개선**:
-    *   `application.yml`에 `org.springframework.security: DEBUG` 로깅을 활성화하고, 애플리케이션 패키지 로깅 레벨을 `OrangeCloud: DEBUG`로 수정했습니다.
-    *   `AuthService`와 `AuthController`의 주요 메서드에 SLF4J 로거를 추가하고 상세 로그를 기록하도록 했습니다.
-
-4.  **Redis 통합 (블랙리스트, 캐싱, 속도 제한)**:
-    *   **리프레시 토큰 블랙리스트**: `AuthService`에 Redis 기반의 액세스 및 리프레시 토큰 블랙리스트 기능을 구현했습니다.
-    *   **속도 제한 (Rate Limiting)**: `RateLimitingService`를 Redis 기반으로 구현하고 `AuthController`의 `signup`, `login` 엔드포인트에 적용했습니다.
-    *   **캐싱**: `RedisConfig`에 Spring Caching을 활성화하고 `AuthService.getCurrentUserInfo` 메서드에 `@Cacheable`을 적용했습니다.
-
-5.  **`getCurrentUser` 버그 수정**:
-    *   `JwtAuthenticationFilter`에서 `Authentication` 객체에 `UUID`를 주체로 설정하고, `AuthService.getCurrentUserInfo`가 `UUID`를 받도록 변경하며, `AuthController`에서 `UUID.fromString(authentication.getName())`을 호출하도록 수정하여 사용자 정보 조회 오류를 해결했습니다.
-
-6.  **환경 변수 확인 및 수정**:
-    *   `USER_SERVICE_PORT` 플레이스홀더가 해결되지 않던 문제를 `weAlist-deploy/docker-compose.yaml`에 `USER_SERVICE_PORT` 환경 변수를 명시적으로 추가하여 해결했습니다.
-
-7.  **`JwtTokenProvider` 설정 수정**:
-    *   `JwtTokenProvider`에서 `jwtSecret` 및 `jwtExpirationInMs`에 대한 `@Value` 어노테이션의 프로퍼티 이름 불일치를 수정했습니다.
-
----
-
 ## 📝 향후 개선점 (할 일 목록)
 
 ### 1. 개발 환경 개선 (Development Environment Improvement) - **높은 우선순위 (사용자 요청)**
