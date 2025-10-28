@@ -9,7 +9,9 @@ import OrangeCloud.UserRepo.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
-import OrangeCloud.UserRepo.dto.MessageApiResponse;
+import OrangeCloud.UserRepo.exception.InvalidTokenException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin(origins = "*", maxAge = 3600)
 @Tag(name = "Authentication", description = "인증 관련 API")
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
 
@@ -34,14 +38,11 @@ public class AuthController {
     @Operation(summary = "회원가입", description = "새로운 사용자 계정을 생성합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원가입 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
-    public ResponseEntity<MessageApiResponse> signup(@Valid @RequestBody SignupRequest signupRequest) {
-        try {
-            AuthResponse authResponse = authService.signup(signupRequest);
-            return ResponseEntity.ok(new MessageApiResponse(true, "회원가입이 완료되었습니다.", authResponse));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageApiResponse(false, e.getMessage()));
-        }
+    public ResponseEntity<AuthResponse> signup(@Valid @RequestBody SignupRequest signupRequest) {
+        logger.debug("Received signup request for email: {}", signupRequest.getEmail());
+        AuthResponse authResponse = authService.signup(signupRequest);
+        logger.info(MessageCode.SIGNUP_SUCCESS.getMessage() + ": {}", signupRequest.getEmail());
+        return ResponseEntity.ok(authResponse);
     }
 
     // 로그인
@@ -49,14 +50,11 @@ public class AuthController {
     @Operation(summary = "로그인", description = "사용자 인증을 수행하고 JWT 토큰을 발급합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증 실패")
-    public ResponseEntity<MessageApiResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
-        try {
-            AuthResponse authResponse = authService.login(loginRequest);
-            return ResponseEntity.ok(new MessageApiResponse(true, "로그인이 완료되었습니다.", authResponse));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageApiResponse(false, e.getMessage()));
-        }
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+        logger.debug("Received login request for email: {}", loginRequest.getEmail());
+        AuthResponse authResponse = authService.login(loginRequest);
+        logger.info(MessageCode.LOGIN_SUCCESS.getMessage() + ": {}", loginRequest.getEmail());
+        return ResponseEntity.ok(authResponse);
     }
 
     // 로그아웃
@@ -65,14 +63,11 @@ public class AuthController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그아웃 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
     public ResponseEntity<MessageApiResponse> logout(HttpServletRequest request) {
-        try {
-            String token = extractTokenFromRequest(request);
-            authService.logout(token);
-            return ResponseEntity.ok(new MessageApiResponse(true, "로그아웃이 완료되었습니다."));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageApiResponse(false, e.getMessage()));
-        }
+        logger.debug("Received logout request.");
+        String token = extractTokenFromRequest(request);
+        authService.logout(token);
+        logger.info(MessageCode.LOGOUT_SUCCESS.getMessage());
+        return ResponseEntity.ok(new MessageApiResponse(true, MessageCode.LOGOUT_SUCCESS.getMessage()));
     }
 
     // 토큰 갱신
@@ -80,14 +75,11 @@ public class AuthController {
     @Operation(summary = "토큰 갱신", description = "Refresh Token을 사용하여 Access Token을 갱신합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "토큰 갱신 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "유효하지 않은 토큰")
-    public ResponseEntity<MessageApiResponse> refresh(@Valid @RequestBody RefreshTokenRequest refreshRequest) {
-        try {
-            AuthResponse authResponse = authService.refreshToken(refreshRequest.getRefreshToken());
-            return ResponseEntity.ok(new MessageApiResponse(true, "토큰이 갱신되었습니다.", authResponse));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageApiResponse(false, e.getMessage()));
-        }
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest refreshRequest) {
+        logger.debug("Received refresh token request.");
+        AuthResponse authResponse = authService.refreshToken(refreshRequest.getRefreshToken());
+        logger.info(MessageCode.TOKEN_REFRESH_SUCCESS.getMessage());
+        return ResponseEntity.ok(authResponse);
     }
 
     // 내 정보 조회
@@ -95,22 +87,23 @@ public class AuthController {
     @Operation(summary = "내 정보 조회", description = "현재 인증된 사용자의 정보를 조회합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
-    public ResponseEntity<MessageApiResponse> getCurrentUser(Authentication authentication) {
-        try {
-            UserInfoResponse userInfo = authService.getCurrentUserInfo(authentication.getName());
-            return ResponseEntity.ok(new MessageApiResponse(true, "사용자 정보 조회 성공", userInfo));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageApiResponse(false, e.getMessage()));
-        }
+    public ResponseEntity<UserInfoResponse> getCurrentUser(Authentication authentication) {
+        logger.debug("Received request to get current user info for: {}", authentication.getName());
+        UserInfoResponse userInfo = authService.getCurrentUserInfo(authentication.getName());
+        logger.info(MessageCode.USER_INFO_RETRIEVED_SUCCESS.getMessage() + ": {}", authentication.getName());
+        return ResponseEntity.ok(userInfo);
     }
 
     // 헬퍼 메서드: Request에서 토큰 추출
     private String extractTokenFromRequest(HttpServletRequest request) {
+        logger.debug("Attempting to extract token from request.");
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+            String token = bearerToken.substring(7);
+            logger.debug("Token extracted successfully.");
+            return token;
         }
-        throw new RuntimeException("Authorization 헤더에서 토큰을 찾을 수 없습니다.");
+        logger.warn(ErrorCode.TOKEN_NOT_FOUND.getMessage());
+        throw new InvalidTokenException("Authorization 헤더에서 토큰을 찾을 수 없습니다.");
     }
 }

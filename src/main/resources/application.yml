@@ -46,3 +46,8 @@ app:
   JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
   JWT_ACCESS_MS: ${JWT_ACCESS_MS}
   jwt.access.in.ms: ${JWT_ACCESS_MS}
+
+logging:
+  level:
+    OrangeCloud: DEBUG # 애플리케이션 패키지 로깅 레벨
+    org.springframework.security: DEBUG
