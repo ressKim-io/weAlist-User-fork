@@ -11,16 +11,17 @@ import OrangeCloud.UserRepo.exception.EmailAlreadyExistsException;
 import OrangeCloud.UserRepo.exception.UserNotFoundException;
 import OrangeCloud.UserRepo.exception.InvalidPasswordException;
 import OrangeCloud.UserRepo.exception.InvalidTokenException;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -33,17 +34,17 @@ public class AuthService {
     @Autowired
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
-
-    // 로그아웃된 토큰들을 저장할 블랙리스트 (실제로는 Redis 등을 사용하는 것이 좋습니다)
-    private final Set<String> tokenBlacklist = new HashSet<>();
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtTokenProvider tokenProvider) {
+                       JwtTokenProvider tokenProvider,
+                       RedisTemplate<String, Object> redisTemplate) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
+        this.redisTemplate = redisTemplate;
     }
 
     public AuthResponse signup(SignupRequest signupRequest) {
@@ -108,9 +109,16 @@ public class AuthService {
             throw new InvalidTokenException("유효하지 않은 토큰입니다.");
         }
 
-        // 토큰을 블랙리스트에 추가
-        tokenBlacklist.add(token);
-        logger.debug("Token blacklisted successfully.");
+        // 토큰을 Redis 블랙리스트에 추가 (만료 시간과 함께)
+        Date expirationDate = tokenProvider.getExpirationDateFromToken(token);
+        long ttl = expirationDate.getTime() - System.currentTimeMillis(); // Time to live in milliseconds
+
+        if (ttl > 0) {
+            redisTemplate.opsForValue().set(token, "blacklisted", Duration.ofMillis(ttl));
+            logger.debug("Token blacklisted successfully in Redis with expiration: {}ms", ttl);
+        } else {
+            logger.warn("Token is already expired or has no valid expiration date. Not adding to blacklist: {}", token);
+        }
     }
 
     public AuthResponse refreshToken(String refreshToken) {
@@ -120,6 +128,12 @@ public class AuthService {
         if (!tokenProvider.validateRefreshToken(refreshToken)) {
             logger.warn("Refresh token failed: Invalid refresh token provided.");
             throw new InvalidTokenException("유효하지 않은 refresh token입니다.");
+        }
+
+        // Check if the old refresh token is blacklisted
+        if (isTokenBlacklisted(refreshToken)) {
+            logger.warn("Refresh token failed: Provided refresh token is blacklisted.");
+            throw new InvalidTokenException("블랙리스트에 등록된 refresh token입니다.");
         }
 
         // Refresh 토큰에서 사용자 ID 추출
@@ -133,6 +147,16 @@ public class AuthService {
                     return new UserNotFoundException("사용자를 찾을 수 없습니다.");
                 });
 
+        // Blacklist the old refresh token
+        Date expirationDate = tokenProvider.getExpirationDateFromToken(refreshToken);
+        long ttl = expirationDate.getTime() - System.currentTimeMillis();
+        if (ttl > 0) {
+            redisTemplate.opsForValue().set(refreshToken, "blacklisted", Duration.ofMillis(ttl));
+            logger.debug("Old refresh token blacklisted successfully in Redis with expiration: {}ms", ttl);
+        } else {
+            logger.warn("Old refresh token is already expired or has no valid expiration date. Not blacklisting: {}", refreshToken);
+        }
+
         // 새로운 토큰 생성
         String newAccessToken = tokenProvider.generateToken(user.getUserId());
         String newRefreshToken = tokenProvider.generateRefreshToken(user.getUserId());
@@ -141,8 +165,9 @@ public class AuthService {
         return new AuthResponse(newAccessToken, newRefreshToken, user.getUserId(), user.getName(), user.getEmail());
     }
 
+    @Cacheable(value = "userInfo", key = "#email")
     public UserInfoResponse getCurrentUserInfo(String email) {
-        logger.debug("Attempting to get user info for email: {}", email);
+        logger.debug("Attempting to get user info for email: {} (from cache or DB)", email);
 
         User user = userRepository.findByEmailAndIsActiveTrue(email)
                 .orElseThrow(() -> {
@@ -162,13 +187,14 @@ public class AuthService {
 
     // 토큰이 블랙리스트에 있는지 확인하는 메서드
     public boolean isTokenBlacklisted(String token) {
-        logger.debug("Checking if token is blacklisted: {}", token);
-        boolean isBlacklisted = tokenBlacklist.contains(token);
-        if (isBlacklisted) {
-            logger.warn("Token is blacklisted: {}", token);
+        logger.debug("Checking if token is blacklisted in Redis: {}", token);
+        Boolean isBlacklisted = redisTemplate.hasKey(token);
+        if (Boolean.TRUE.equals(isBlacklisted)) {
+            logger.warn("Token is blacklisted in Redis: {}", token);
+            return true;
         } else {
-            logger.debug("Token is not blacklisted: {}", token);
+            logger.debug("Token is not blacklisted in Redis: {}", token);
+            return false;
         }
-        return isBlacklisted;
     }
 }

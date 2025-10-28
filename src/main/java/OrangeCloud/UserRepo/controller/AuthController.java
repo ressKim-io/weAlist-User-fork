@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import OrangeCloud.UserRepo.exception.InvalidTokenException;
 import OrangeCloud.UserRepo.exception.ErrorCode;
+import OrangeCloud.UserRepo.service.RateLimitingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,10 +29,12 @@ public class AuthController {
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
+    private final RateLimitingService rateLimitingService;
 
     @Autowired
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RateLimitingService rateLimitingService) {
         this.authService = authService;
+        this.rateLimitingService = rateLimitingService;
     }
 
     // 회원가입
@@ -39,7 +42,10 @@ public class AuthController {
     @Operation(summary = "회원가입", description = "새로운 사용자 계정을 생성합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원가입 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
-    public ResponseEntity<AuthResponse> signup(@Valid @RequestBody SignupRequest signupRequest) {
+    public ResponseEntity<AuthResponse> signup(@Valid @RequestBody SignupRequest signupRequest, HttpServletRequest request) {
+        String clientIp = request.getRemoteAddr();
+        rateLimitingService.checkRateLimit(clientIp + ":signup", 5, 60); // 1분당 5회 제한
+
         logger.debug("Received signup request for email: {}", signupRequest.getEmail());
         AuthResponse authResponse = authService.signup(signupRequest);
         logger.info(MessageCode.SIGNUP_SUCCESS.getMessage() + ": {}", signupRequest.getEmail());
@@ -51,7 +57,10 @@ public class AuthController {
     @Operation(summary = "로그인", description = "사용자 인증을 수행하고 JWT 토큰을 발급합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증 실패")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest loginRequest, HttpServletRequest request) {
+        String clientIp = request.getRemoteAddr();
+        rateLimitingService.checkRateLimit(clientIp + ":login", 5, 60); // 1분당 5회 제한
+
         logger.debug("Received login request for email: {}", loginRequest.getEmail());
         AuthResponse authResponse = authService.login(loginRequest);
         logger.info(MessageCode.LOGIN_SUCCESS.getMessage() + ": {}", loginRequest.getEmail());
