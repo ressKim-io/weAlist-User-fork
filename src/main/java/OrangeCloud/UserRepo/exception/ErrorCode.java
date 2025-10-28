@@ -31,7 +31,7 @@ public enum ErrorCode {
     TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, "T001", "Team not found"),
     LEADER_NOT_FOUND_IN_TEAM(HttpStatus.BAD_REQUEST, "T002", "Leader not found in team"),
     NOT_TEAM_LEADER(HttpStatus.FORBIDDEN, "T003", "Not a team leader"),
-    TEAM_MEMBER_NOT_FOUND(HttpStatus.NOT_REQUESTED, "T004", "Team member not found"),
+    TEAM_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "T004", "Team member not found"),
 
     // JWT Specific Errors
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "J001", "Invalid JWT token"),
